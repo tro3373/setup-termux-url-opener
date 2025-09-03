@@ -1,0 +1,180 @@
+#!/data/data/com.termux/files/usr/bin/bash
+
+script_dir=$(cd "$(dirname "${BASH_SOURCE:-$0}")" && pwd) && readonly script_dir
+# ogp_bin="${script_dir}/ogp" && readonly ogp_bin
+# download_dir="/data/data/com.termux/files/home/storage/downloads" && readonly download_dir
+log_file=$script_dir/termux-url-opener.log && readonly log_file
+# echo "$@" >>/data/data/com.termux/files/home/bin/log
+# echo "$@" >>/data/data/com.termux/files/home/storage/downloads/termux-url-opener.log
+#url_encode() { cat - |sed -e 's,^.*=,,g' -e 's,^.*/,,g' |curl -Gso /dev/null -w '%{url_effective}' --data-urlencode @- "" | cut -c 3-; }
+#url_encode() { cat - |sed -e 's,^.*=,,g' -e 's,^.*/,,g'; }
+
+has() { command -v "${1}" >&/dev/null; }
+hass() { for arg in "$@"; do has "$arg" || error "==> No $arg command exist."; done; }
+_ink() { cat - | if has ink; then ink "$@"; else cat - 1>&2; fi; }
+#_log() { echo "$(date +"%Y-%m-%d %H:%M:%S") $(test -p /dev/stdin && cat -) ${@:2}" | _ink "$1"; }
+# shellcheck disable=SC2145
+_log() { echo "$(date +"%Y-%m-%d %H:%M:%S") ${@:2}" | tee -a "$log_file" | _ink "$1"; }
+log() { _log white "$*"; }
+info() { _log cyan "$*"; }
+warn() { _log yellow "$*"; }
+error() { _log red "$*" && exit 1; }
+
+dump_result() {
+  cat <<EOF | tee -a "$log_file"
+url=$url
+title=$title
+description=$description
+image=$image
+res: $res
+EOF
+}
+
+cat_for_keep() {
+  cat <<EOF
+$description
+
+$url
+EOF
+}
+
+cat_gemini_prompt() {
+  cat <"$script_dir/prompt.md"
+  echo "$org_url"
+}
+
+cat_for_keep_via_gemini() {
+  log "==> Generating Gemini summary.. prompt:"
+  prmpt_path="$script_dir/prompt-gen.md"
+  cat_gemini_prompt >"$prmpt_path"
+
+  cat <"$prmpt_path" | _ink white
+  termux-chroot bash -c "cat <$prmpt_path | gemini -y -p '' | grep -v 'Loaded cached credentials.'"
+}
+
+to_keep() {
+  log "==> Adding to Google Keep: $title"
+  image_file="$script_dir"/termux-url-opener.img
+  stream_opt=
+  if [[ -n $image ]]; then
+    curl -fSsL -o "$image_file" "$image"
+    # shellcheck disable=SC2089
+    stream_opt='--esa android.intent.extra.STREAM "file:///sdcard/Download/termux-url-opener.img"'
+  fi
+  # shellcheck disable=SC2090,SC2086
+  am start -a android.intent.action.SEND_MULTIPLE \
+    -t "image/*" \
+    -p com.google.android.keep \
+    --es android.intent.extra.SUBJECT "$title" \
+    --es android.intent.extra.TEXT "$(cat <&0)" $stream_opt
+}
+
+to_notion() {
+  log "==> Adding to Notion: $title"
+  local title_escaped description_escaped image_line
+  if [[ -n $image ]]; then
+    image_line="\"画像URL\": {\"url\": \"$image\"}, "
+  fi
+  title_escaped=${title//\"/\\\"}
+  description_escaped=${description//\"/\\\"}
+  cat <<EOF >~/bin/to_notion.json
+{
+  "parent": {"database_id": "$NOTION_DATABASE_ID"},
+  "properties": {
+    "名前": {"title": [{"text": {"content": "$title_escaped"}}]},
+    "URL": {"url": "$url"},
+    $image_line
+    "既読": {"checkbox": false},
+    "Stock": {"checkbox": false}
+  },
+  "children": [
+    {
+      "object": "block",
+      "type": "paragraph",
+      "paragraph": {
+        "rich_text": [
+          {"text": {"content": "$description_escaped"}}
+        ]
+      }
+    }
+  ]
+}
+EOF
+  cat <<'EOF' >~/bin/to_notion.sh
+#!/data/data/com.termux/files/usr/bin/bash
+
+. ~/bin/.env
+#curl -fsSL -X POST 'https://api.notion.com/v1/pages' \
+curl -L -X POST 'https://api.notion.com/v1/pages' \
+  -H "Authorization: Bearer $NOTION_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Notion-Version: 2022-06-28" \
+  -d @"$HOME/bin/to_notion.json"
+EOF
+
+  termux-chroot bash ~/bin/to_notion.sh 2>&1 || {
+    warn "==>Failed to execute Notion API request. Press Enter to exit."
+    read -r _
+    exit 1
+  }
+  info "==>Successfully added to notion"
+}
+
+main() {
+  set -eo pipefail
+  log "==> Removeing old log file: $log_file"
+  rm -rf "$log_file"
+  log "==> Starting termux-url-opener with arguments: $*"
+  export PATH="$HOME/bin:$PATH"
+  log "==> Checking required commands.."
+  hass ogp jq curl am termux-chroot
+  log "==> Loading environment variables from .env file.."
+  # shellcheck disable=SC1009
+  source "$script_dir"/.env
+  local org_url="$1"
+  if ! has termux-chroot; then
+    error "No termux-chroot exist"
+  fi
+  if ! termux-chroot "test -e /etc/resolv.conf && grep nameserver /etc/resolv.conf" >&/dev/null; then
+    termux-chroot "echo 'nameserver 8.8.8.8' >>/etc/resolv.conf /etc/resolv.conf"
+  fi
+  #if ! pgrep ydl >&/dev/null; then
+  #  # nohup termux-chroot /home/bin/ydl &
+  #  nohup ~/bin/start_ydl &
+  #fi
+  ##url=$(echo "$@" |url_encode)
+  #url="$*"
+  #am start -a android.intent.action.VIEW -d "http://localhost:3000?uuid=me&url=$url"
+  # res=$(termux-chroot X_COOKIE_JSON="$X_COOKIE_JSON" ogp "$org_url")
+  log "==> Fetching OGP data for URL: $org_url"
+  res=$(termux-chroot ". ~/bin/.env && ogp \"$org_url\"" | tee ~/bin/ogp.result.json)
+  if [[ -z $res || $res == "[]" ]]; then
+    error "Failed to fetch OGP data for URL: $org_url"
+  fi
+
+  url=$(echo "$res" | jq -r '.URL // empty')
+  title=$(echo "$res" | jq -r '.Title // empty')
+  description=$(echo "$res" | jq -r '.Description // empty')
+  image=$(echo "$res" | jq -r '.Image // empty')
+  dump_result
+  if [[ $mode == notion ]]; then
+    if [[ -z $NOTION_API_KEY || -z $NOTION_DATABASE_ID ]]; then
+      error "Notion API key or database ID is not set."
+    fi
+    to_notion
+    return
+  fi
+  if [[ $mode == keep ]]; then
+    if ! has am; then
+      error "am command not found, cannot open Google Keep."
+    fi
+    if has gemini; then
+      cat_for_keep_via_gemini | to_keep
+      return
+    fi
+    cat_for_keep | to_keep
+    return
+  fi
+  log "Unknown mode: $mode"
+}
+main "$@"

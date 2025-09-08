@@ -6,8 +6,11 @@ dotenv := $(PWD)/.env
 -include $(dotenv)
 
 deploy:
-	@scp termux-url-opener termux:bin/
+	@scp .env cookies.json termux-url-opener termux:bin/
 
-deploy-all:
-	@scp termux-url-opener k n ogp .env cookies.json prompt.md termux:bin/
+deploy-keys:
+	@scp .env cookies.json termux:bin/
+
+deploy-all: deploy-keys
+	@scp termux-url-opener k n ogp prompt.md termux:bin/
 

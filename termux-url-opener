@@ -147,7 +147,7 @@ main() {
   #am start -a android.intent.action.VIEW -d "http://localhost:3000?uuid=me&url=$url"
   # res=$(termux-chroot X_COOKIE_JSON="$X_COOKIE_JSON" ogp "$org_url")
   log "==> Fetching OGP data for URL: $org_url"
-  res=$(termux-chroot ". ~/bin/.env && ogp \"$org_url\"" | tee ~/bin/ogp.result.json)
+  res=$(termux-chroot "cd bin && . .env && ogp \"$org_url\"" | tee ~/bin/ogp.result.json)
   if [[ -z $res || $res == "[]" ]]; then
     error "Failed to fetch OGP data for URL: $org_url"
   fi

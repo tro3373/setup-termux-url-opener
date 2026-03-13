@@ -120,6 +120,30 @@ EOF
   info "==>Successfully added to notion"
 }
 
+to_gtasks() {
+  cat <<EOF >~/bin/to_gtasks.sh
+#!/data/data/com.termux/files/usr/bin/bash
+
+. ~/bin/.env
+title="$title"
+notes="$description
+
+$url"
+[[ $url =~ ^https?://x.com/.*$ ]] && {
+  title="$description"
+  notes="$url
+$title"
+}
+gog tasks add \$GOG_TASKS_LIST_ID --title "\$title" --notes "\$notes"
+EOF
+  termux-chroot bash ~/bin/to_gtasks.sh 2>&1 || {
+    warn "==>Failed to execute Google Tasks API request. Press Enter to exit."
+    read -r _
+    exit 1
+  }
+  info "==>Successfully added to Google Tasks"
+}
+
 main() {
   set -eo pipefail
   log "==> Removeing old log file: $log_file"
@@ -152,16 +176,23 @@ main() {
     error "Failed to fetch OGP data for URL: $org_url"
   fi
 
-  url=$(echo "$res" | jq -r '.URL // empty')
-  title=$(echo "$res" | jq -r '.Title // empty')
-  description=$(echo "$res" | jq -r '.Description // empty')
-  image=$(echo "$res" | jq -r '.Image // empty')
+  url=$(echo "$res" | jq -r '.url // empty')
+  title=$(echo "$res" | jq -r '.title // empty')
+  description=$(echo "$res" | jq -r '.description // empty')
+  image=$(echo "$res" | jq -r '.image // empty')
   dump_result
   if [[ $mode == notion ]]; then
     if [[ -z $NOTION_API_KEY || -z $NOTION_DATABASE_ID ]]; then
       error "Notion API key or database ID is not set."
     fi
     to_notion
+    return
+  fi
+  if [[ $mode == gtasks ]]; then
+    if [[ -z $GOG_KEYRING_PASSWORD || -z $GOG_TASKS_LIST_ID ]]; then
+      error "Google Tasks API keyring password or tasks list ID is not set."
+    fi
+    to_gtasks
     return
   fi
   if [[ $mode == keep ]]; then

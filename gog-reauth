@@ -1,0 +1,13 @@
+#!/data/data/com.termux/files/usr/bin/bash
+
+script_dir=$(cd "$(dirname "${BASH_SOURCE:-$0}")" && pwd) && readonly script_dir
+main() {
+  set -eo pipefail
+  source "$script_dir"/.env
+  if [[ -z $GOG_ACCOUNT_EMAIL ]]; then
+    echo "GOG_ACCOUNT_EMAIL is not set in .env file. Please set it and try again."
+    exit 1
+  fi
+  termux-chroot "cd bin && . .env && gog auth add $GOG_ACCOUNT_EMAIL"
+}
+main "$@"

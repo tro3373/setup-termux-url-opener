@@ -12,5 +12,5 @@ deploy-keys:
 	@scp .env cookies.json termux:bin/
 
 deploy-all: deploy-keys
-	@scp termux-url-opener k n ogp prompt.md termux:bin/
+	@scp termux-url-opener k n g gog-reauth ogp prompt.md termux:bin/
 

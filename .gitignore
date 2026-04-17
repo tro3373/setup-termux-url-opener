@@ -1,3 +1,4 @@
 .env*
+!.env.template
 cookies.json
 ogp

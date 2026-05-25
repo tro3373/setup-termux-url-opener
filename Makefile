@@ -6,11 +6,11 @@ dotenv := $(PWD)/.env
 -include $(dotenv)
 
 deploy:
-	@scp .env cookies.json termux-url-opener termux:bin/
+	@scp .env cookies.json termux-url-opener to_notion.sh to_gtasks.sh to_keep.sh termux:bin/
 
 deploy-keys:
 	@scp .env cookies.json termux:bin/
 
-deploy-all: deploy-keys
-	@scp termux-url-opener k n g gog-reauth ogp prompt.md termux:bin/
+deploy-all: deploy
+	@scp k n g gog-reauth ogp prompt.md termux:bin/
 

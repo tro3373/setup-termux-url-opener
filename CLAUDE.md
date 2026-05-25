@@ -2,67 +2,49 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project Overview
+## What this is
 
-This is a Termux-based URL handling and content extraction project that processes URLs to extract Open Graph Protocol (OGP) data and integrate with various services.
+Termux URL opener for Android. Android Intent invokes `termux-url-opener "$url"`, which fetches OGP via the bundled `ogp` ARM64 binary and routes the result to one of three backends: Notion, Google Keep, or Google Tasks (`gog` CLI). Optionally summarizes via Gemini CLI before saving.
 
-## Architecture
+Setup details (gemini install, building `gog` for android arm, gogcli auth) live in `README.md` — read it before recommending setup changes.
 
-### Core Components
+## Target environment
 
-1. **termux-url-opener** - Main bash script that:
-   - Handles URLs passed from Termux share intent
-   - Extracts OGP metadata using the `ogp` binary
-   - Logs operations to `/data/data/com.termux/files/home/storage/downloads/termux-url-opener.log`
-   - Integrates with Google Keep for saving content
-   - Uses X (Twitter) cookies for authentication
+Scripts run on Termux on Android, not desktop Linux:
+- Main script shebang is `#!/data/data/com.termux/files/usr/bin/bash` (hard-coded path). Do not change it.
+- External commands are wrapped with `termux-chroot` so they see a normal Linux FS layout. Keep this wrapping when editing `to_notion` / `to_gtasks` / `main`.
+- DNS workaround: `setup_and_check` writes `nameserver 8.8.8.8` into the chroot's `/etc/resolv.conf` if missing. Don't remove it.
+- Scripts can't be run/tested locally on dev machine — verification is "scp and run on device."
 
-2. **cookies.json** - Contains X/Twitter authentication cookies for API access
+## Deploy commands
 
-3. **Documentation** - `hoge.md` and `zen` files document MCP integration with @mizchi/readability
+No CI, no tests. Deployment is `scp` over SSH to a host alias `termux`:
+- `make deploy` (default) — `.env`, `cookies.json`, `termux-url-opener` only. Use for code changes to the main script.
+- `make deploy-keys` — `.env`, `cookies.json` only. Use when only env/credentials changed.
+- `make deploy-all` — everything: main script + mode switchers (`k`/`n`/`g`) + `gog-reauth` + `ogp` binary + `prompt.md`. Use for first-time setup or when any auxiliary file changed.
 
-## Development Commands
+Pick the narrowest target — `deploy-all` re-ships the ARM64 `ogp` binary every time.
 
-### Shell Script Linting and Formatting
-```bash
-# Lint shell scripts
-shellcheck -e SC1090,SC2059,SC2155,SC2164,SC2086,SC2162 termux-url-opener
+## Mode switching
 
-# Format shell scripts  
-shfmt -i 2 -ci -s termux-url-opener
-```
+`mode=notion|keep|gtasks` in `.env` selects the backend. The three single-letter scripts mutate `.env` in place:
+- `k` → sets `mode=keep`
+- `n` → sets `mode=gtasks` (not "notion" — naming is historical)
+- `g` → sets `mode=notion`
 
-### Testing the URL Opener
-```bash
-# Test the script with a URL
-./termux-url-opener "https://example.com"
+They `sed -i '/^export mode=.*$/d'` then append. No validation. If you add a new mode, update all three scripts plus the `case "$mode" in` block in `termux-url-opener` (the `*)` arm currently just logs "Unknown mode").
 
-# Check logs
-tail -f /data/data/com.termux/files/home/storage/downloads/termux-url-opener.log
-```
+## Env file convention
 
-## Key Implementation Details
+`.env.template` is the source of truth for required vars (`X_COOKIE_JSON`, `NOTION_API_KEY`, `NOTION_DATABASE_ID`, `GOG_KEYRING_BACKEND`, `GOG_KEYRING_PASSWORD`, `GOG_TASKS_LIST_ID`, `mode`, `GOG_ACCOUNT_EMAIL`). `.env` is gitignored. When adding a new env var, add it to `.env.template` too.
 
-### Environment Setup
-- Script requires `.env` file in the same directory with `X_COOKIE_JSON` variable
-- Uses `termux-chroot` for network operations with DNS resolution (8.8.8.8)
-- Depends on `ogp` binary for extracting metadata (currently missing)
+## Bash conventions used in this repo
 
-### Data Flow
-1. URL received → termux-url-opener
-2. Process through chroot environment with cookies
-3. Extract OGP data (URL, Title, Description, Image)
-4. Log results and optionally send to Google Keep
+Follow the patterns already in `termux-url-opener`:
+- `set -eo pipefail` inside `main`/`setup_and_check`, not at top level.
+- `readonly` for path constants computed from `$BASH_SOURCE`.
+- `has()` / `hass()` guard helpers — use them instead of inline `command -v` checks.
+- Logging via `log` / `info` / `warn` / `error` (color via optional `ink`, appended to `$log_file`). `error` exits non-zero.
+- `# shellcheck disable=...` comments are intentional — preserve them when refactoring.
 
-## Dependencies
-
-- **termux-chroot** - Required for network operations
-- **jq** - JSON parsing for OGP response
-- **ogp** binary - Core component for metadata extraction (needs to be provided)
-- **am** (Activity Manager) - Android intent handling
-
-## Notes
-
-- Empty directories (`github/`, `sample/`, `urls/`) suggest planned features or data storage
-- MCP integration with @mizchi/readability is documented for web content extraction
-- Follows bash best practices with early return patterns and function extraction
+`shellcheck` and `shfmt` are available locally; run them after editing shell files.

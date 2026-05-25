@@ -7,8 +7,8 @@ log_file=$script_dir/termux-url-opener.log && readonly log_file
 ogp_result=$script_dir/ogp.result.json && readonly ogp_result
 # echo "$@" >>/data/data/com.termux/files/home/bin/log
 # echo "$@" >>/data/data/com.termux/files/home/storage/downloads/termux-url-opener.log
-#url_encode() { cat - |sed -e 's,^.*=,,g' -e 's,^.*/,,g' |curl -Gso /dev/null -w '%{url_effective}' --data-urlencode @- "" | cut -c 3-; }
-#url_encode() { cat - |sed -e 's,^.*=,,g' -e 's,^.*/,,g'; }
+# url_encode() { cat - |sed -e 's,^.*=,,g' -e 's,^.*/,,g' |curl -Gso /dev/null -w '%{url_effective}' --data-urlencode @- "" | cut -c 3-; }
+# url_encode() { cat - |sed -e 's,^.*=,,g' -e 's,^.*/,,g'; }
 
 has() { command -v "${1}" >&/dev/null; }
 hass() { for arg in "$@"; do has "$arg" || error "==> No $arg command exist."; done; }
@@ -23,19 +23,19 @@ error() { _log red "$*" && exit 1; }
 
 setup_and_check() {
   set -eo pipefail
-  log "==> Checking required commands.."
-  hass ogp jq curl am termux-chroot
-
-  log "==> Removeing old log file: $log_file"
-  rm -rf "$log_file"
   log "==> Starting termux-url-opener with arguments: $*"
   export PATH="$HOME/bin:$PATH"
+  log "==> Checking required commands.."
+  hass ogp jq curl am termux-chroot
   log "==> Loading environment variables from .env file.."
   # shellcheck disable=SC1091
   source "$script_dir"/.env
   if ! has termux-chroot; then
     error "No termux-chroot exist"
   fi
+
+  log "==> Removeing old log file: $log_file"
+  rm -rf "$log_file"
   if ! termux-chroot "test -e /etc/resolv.conf && grep nameserver /etc/resolv.conf" >&/dev/null; then
     termux-chroot "echo 'nameserver 8.8.8.8' >>/etc/resolv.conf /etc/resolv.conf"
   fi
@@ -58,7 +58,7 @@ fetch_ogp() {
   # Pass $org_url as an env var so any shell metacharacters in the URL
   # cannot break out of the inner `bash -c` string.
   # shellcheck disable=SC2016 # $URL is expanded by the chroot-side bash -c, not here.
-  termux-chroot env URL="$org_url" bash -c 'cd bin && . .env && ogp "$URL"' >"$ogp_result"
+  termux-chroot bash -c "cd bin && . .env && ogp '$org_url'" >"$ogp_result"
   local size
   size=$(wc -c <"$ogp_result")
   if ((size == 0)) || [[ $(cat "$ogp_result") == "[]" ]]; then

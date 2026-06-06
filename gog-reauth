@@ -8,6 +8,6 @@ main() {
     echo "GOG_ACCOUNT_EMAIL is not set in .env file. Please set it and try again."
     exit 1
   fi
-  termux-chroot "cd bin && . .env && gog auth add $GOG_ACCOUNT_EMAIL"
+  termux-chroot "cd bin && . .env && gog auth add $GOG_ACCOUNT_EMAIL --services tasks"
 }
 main "$@"

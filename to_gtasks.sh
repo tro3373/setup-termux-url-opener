@@ -65,6 +65,7 @@ build_for_x() {
   [[ -z ${link_text} ]] && link_text=${title}
   [[ -z ${link_text} ]] && link_text=${url}
   gtask_title=$(md_link "${link_text}" "${url}")
+  gtask_notes=""
   # gtask_notes="${description}
 
   # ${title}"
@@ -74,6 +75,7 @@ build_default() {
   local link_text=${title}
   [[ -z ${link_text} ]] && link_text=${url}
   gtask_title=$(md_link "${link_text}" "${url}")
+  gtask_notes=""
   # gtask_notes="${description}"
 }
 

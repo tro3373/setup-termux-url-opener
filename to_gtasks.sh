@@ -60,20 +60,21 @@ build_for_github() {
 build_for_x() {
   local link_text
   link_text=$(truncate_chars "${description}" 50)
+  [[ -z ${link_text} ]] || link_text="$link_text ${title}"
   # Fallback when description is empty so the title is never "[](url)".
   [[ -z ${link_text} ]] && link_text=${title}
   [[ -z ${link_text} ]] && link_text=${url}
   gtask_title=$(md_link "${link_text}" "${url}")
-  gtask_notes="${description}
+  # gtask_notes="${description}
 
-${title}"
+  # ${title}"
 }
 
 build_default() {
   local link_text=${title}
   [[ -z ${link_text} ]] && link_text=${url}
   gtask_title=$(md_link "${link_text}" "${url}")
-  gtask_notes="${description}"
+  # gtask_notes="${description}"
 }
 
 build_args() {
